@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+import signal
 
 import roslib; roslib.load_manifest('flexbe_onboard')
 import rospy
@@ -30,6 +31,14 @@ Created on 20.05.2013
 @author: Philipp Schillinger
 '''
 
+
+def restart():
+    handler = signal.getsignal(signal.SIGTERM)
+    if handler and handler is not signal.default_int_handler:
+        handler(signal.SIGTERM, inspect.currentframe())
+    os.execv(__file__, sys.argv)
+
+
 class VigirBeOnboard(object):
     '''
     Implements an idle state where the robot waits for a behavior to be started.
@@ -56,10 +65,10 @@ class VigirBeOnboard(object):
         self._tmp_folder = tempfile.mkdtemp()
         sys.path.append(self._tmp_folder)
         rospy.on_shutdown(self._cleanup_tempdir)
-        
+
         # prepare manifest folder access
         self._behavior_lib = BehaviorLibrary()
-        
+
         self._pub = ProxyPublisher()
         self._sub = ProxySubscriberCached()
 
@@ -73,6 +82,9 @@ class VigirBeOnboard(object):
         self._running = False
         self._switching = False
         self._sub.subscribe('flexbe/start_behavior', BehaviorSelection, self._behavior_callback)
+
+        # list for restart request
+        self._sub.subscribe('flexbe/restart_engine', Empty, self._restart_callback)
 
         # heartbeat
         self._pub.createPublisher('flexbe/heartbeat', Empty)
@@ -324,6 +336,9 @@ class VigirBeOnboard(object):
         while True:
             self._pub.publish('flexbe/heartbeat', Empty())
             time.sleep(1) # sec
+
+    def _restart_callback(self, _msg):
+        restart()
 
     class _attr_dict(dict): __getattr__ = dict.__getitem__
     def _convert_dict(self, o):
