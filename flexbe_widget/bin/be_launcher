@@ -32,7 +32,7 @@ if __name__ == '__main__':
 		elif opt in ("-a", "--autonomy"):
 			autonomy = int(arg)
 	ignore_args = ['__name', '__log'] # auto-set by roslaunch
-	
+
 	launcher = BehaviorLauncher()
 
 	if behavior != "":
@@ -47,6 +47,13 @@ if __name__ == '__main__':
 			request.arg_values.append(v)
 		rospy.sleep(0.2) # wait for publishers...
 		launcher._callback(request)
+
+	def preempt_behavior():
+		rospy.loginfo("stopping behavior")
+		launcher.preempt()
+		rospy.sleep(1.0)
+
+	rospy.on_shutdown(preempt_behavior)
 
 	# Wait for ctrl-c to stop the application
 	rospy.spin()

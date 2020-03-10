@@ -5,7 +5,7 @@ from flexbe_msgs.msg import *
 from rospkg import RosPack, ResourceNotFound
 
 from flexbe_core import Logger, BehaviorLibrary
-from std_msgs.msg import String
+from std_msgs.msg import String, Empty
 
 import pickle
 import zlib
@@ -27,12 +27,15 @@ class BehaviorLauncher(object):
 		self._pub = rospy.Publisher("flexbe/start_behavior", BehaviorSelection, queue_size=100)
 		self._status_pub = rospy.Publisher("flexbe/status", BEStatus, queue_size=100)
 		self._mirror_pub = rospy.Publisher("flexbe/mirror/structure", ContainerStructure, queue_size=100)
+		self._preempt_pub = rospy.Publisher("flexbe/command/preempt", Empty, queue_size=100)
 
 		self._rp = RosPack()
 		self._behavior_lib = BehaviorLibrary()
 
 		rospy.loginfo("%d behaviors available, ready for start request." % self._behavior_lib.count_behaviors())
 
+	def preempt(self):
+		self._preempt_pub.publish(Empty())
 
 	def _callback(self, msg):
 		be_id, behavior = self._behavior_lib.find_behavior(msg.behavior_name)
