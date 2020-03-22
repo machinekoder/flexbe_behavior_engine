@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+import pickle
 import signal
 
 import roslib; roslib.load_manifest('flexbe_onboard')
@@ -43,6 +44,9 @@ class VigirBeOnboard(object):
     '''
     Implements an idle state where the robot waits for a behavior to be started.
     '''
+
+    CONFIG_PATH = os.path.expanduser('~/.config/FlexBE onboard')
+    LAST_BE_FILE_PATH = os.path.join(CONFIG_PATH, 'last_behavior')
 
     def __init__(self):
         '''
@@ -94,6 +98,31 @@ class VigirBeOnboard(object):
         self._pub.publish(self.status_topic, BEStatus(code=BEStatus.READY))
         rospy.loginfo('\033[92m--- Behavior Engine ready! ---\033[0m')
 
+        self._manual_restart = False
+        self._load_behavior()
+
+    def _store_behavior(self, msg):
+        if not os.path.exists(self.CONFIG_PATH):
+            os.makedirs(self.CONFIG_PATH)
+
+        with open(self.LAST_BE_FILE_PATH, 'w') as f:
+            pickle.dump(msg, f)
+
+    def _load_behavior(self):
+        if not os.path.exists(self.LAST_BE_FILE_PATH):
+            return
+        rospy.loginfo('Behavior was interrupted, starting again')
+        try:
+            with open(self.LAST_BE_FILE_PATH, 'r') as f:
+                msg = pickle.load(f)
+        except (OSError, IOError, pickle.PicklingError):
+            return
+
+        self._behavior_callback(msg)
+
+    def _clear_behavior_store(self):
+        if os.path.exists(self.LAST_BE_FILE_PATH):
+            os.remove(self.LAST_BE_FILE_PATH)
 
     def _behavior_callback(self, msg):
         thread = threading.Thread(target=self._behavior_execution, args=[msg])
@@ -143,6 +172,9 @@ class VigirBeOnboard(object):
                 rate.sleep()
             self._switching = False
 
+        rospy.logdebug('Storing behavior for restart')
+        self._store_behavior(msg)
+
         self._running = True
         self.be = be
 
@@ -173,7 +205,10 @@ class VigirBeOnboard(object):
         self.be = None
         if not self._switching:
             rospy.loginfo('Behavior execution finished with result %s.', str(result))
-            rospy.loginfo('\033[92m--- Behavior Engine ready! ---\033[0m')
+            if not self._manual_restart:
+                rospy.loginfo('\033[92m--- Behavior Engine ready! ---\033[0m')
+                self._clear_behavior_store()
+
         self._running = False
 
 
@@ -338,6 +373,7 @@ class VigirBeOnboard(object):
             time.sleep(1) # sec
 
     def _restart_callback(self, _msg):
+        self._manual_restart = True
         restart()
 
     class _attr_dict(dict): __getattr__ = dict.__getitem__
